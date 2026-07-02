@@ -2,19 +2,19 @@
   "name": "os1-cursor-browser-bridge",
   "displayName": "os1 Cursor Browser Bridge",
   "description": "HTTP API for Cursor IDE embedded browser — script login without Agent (os1 x_cli)",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.74.0"
   },
-  "extensionKind": ["workspace"],
+  "extensionKind": ["workspace", "ui"],
   "activationEvents": ["onStartupFinished"],
   "main": "./extension.js",
   "contributes": {
     "commands": [
       {
         "command": "os1BrowserBridge.openMockupPanel",
-        "title": "os1 Browser Bridge: Open Mockup Panel"
+        "title": "os1 Browser Bridge: Open Mockup Panel (after CSS)"
       },
       {
         "command": "os1BrowserBridge.createScriptSession",
@@ -46,19 +46,19 @@
       }
     ],
     "viewsContainers": {
-      "panel": [
+      "secondarySidebar": [
         {
-          "id": "os1BrowserBridge",
+          "id": "os1BrowserBridgeSidebar",
           "title": "os1 Mockup",
           "icon": "$(paintcan)"
         }
       ]
     },
     "views": {
-      "os1BrowserBridge": [
+      "os1BrowserBridgeSidebar": [
         {
           "type": "webview",
-          "id": "os1BrowserBridge.mockupPanel",
+          "id": "os1BrowserBridge.mockupSidebar",
           "name": "Mockup",
           "when": "true"
         }

@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXT_SRC="${SCRIPT_DIR}/extension"
-EXT_NAME="local.os1-cursor-browser-bridge-0.4.2"
+EXT_NAME="local.os1-cursor-browser-bridge-0.5.0"
 
 if [ ! -f "${EXT_SRC}/extension.js" ]; then
   echo "ERROR: missing ${EXT_SRC}/extension.js"
@@ -22,7 +22,7 @@ fi
 
 echo "==> Installing os1 Cursor Browser Bridge to ${EXT_DIR}"
 mkdir -p "${EXT_DIR}/lib"
-cp "${EXT_SRC}/package.json" "${EXT_SRC}/extension.js" "${EXT_SRC}/snapshot.js" "${EXT_DIR}/"
+cp "${EXT_SRC}/package.json" "${EXT_SRC}/extension.js" "${EXT_SRC}/extension-ui.js" "${EXT_SRC}/snapshot.js" "${EXT_DIR}/"
 cp "${EXT_SRC}/lib/"*.js "${EXT_DIR}/lib/"
 
 echo "==> Done."

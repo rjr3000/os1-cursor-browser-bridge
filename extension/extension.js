@@ -27,7 +27,6 @@ const {
     designRemove,
     designMove,
 } = require('./lib/design-api');
-const { mockupPanelHtml } = require('./lib/mockup-panel-webview');
 
 const PORT_FILE = '/tmp/cursor-browser-bridge-port';
 const SCRIPT_AGENT_ID = 'os1-browser-bridge-script';
@@ -950,7 +949,7 @@ function startServer(output) {
             }
 
             if (req.method === 'GET' && pathname === '/health') {
-                return respond(200, { ok: true, version: '0.4.2' });
+                return respond(200, { ok: true, version: '0.5.0' });
             }
 
             if (req.method === 'GET' && pathname === '/tools') {
@@ -1109,75 +1108,21 @@ function startServer(output) {
 
 let server = null;
 
-class MockupPanelProvider {
-    constructor() {
-        /** @type {vscode.WebviewView | null} */
-        this._view = null;
-    }
-
-    resolveWebviewView(webviewView) {
-        this._view = webviewView;
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [],
-        };
-        webviewView.webview.html = mockupPanelHtml();
-        webviewView.onDidChangeVisibility(() => {
-            if (webviewView.visible) {
-                webviewView.webview.html = mockupPanelHtml();
-            }
-        });
-    }
-
-    refresh() {
-        if (this._view?.visible) {
-            this._view.webview.html = mockupPanelHtml();
-        }
-    }
-}
-
-const mockupPanelProvider = new MockupPanelProvider();
-
-async function activeBrowserViewId() {
-    await ensureScriptAgentContext();
-    const viewId = await resolveViewId();
-    if (!viewId) {
-        throw new Error('No IDE browser tab open. Open the Cursor browser tab first (e.g. login live1).');
-    }
-    return viewId;
-}
-
-async function runDesignCommand(method, fn) {
-    try {
-        const viewId = await activeBrowserViewId();
-        const result = await fn(viewId);
-        if (result?.success === false) {
-            vscode.window.showErrorMessage(`os1 Mockup: ${result.error || JSON.stringify(result)}`);
-        } else {
-            const msg = result?.message || `${method} OK`;
-            vscode.window.showInformationMessage(`os1 Mockup: ${msg}`);
-        }
-        extensionOutput?.appendLine(`[Bridge] palette ${method}: ${JSON.stringify(result)}`);
-        return result;
-    } catch (err) {
-        vscode.window.showErrorMessage(`os1 Mockup: ${err.message}`);
-        extensionOutput?.appendLine(`[Bridge] palette ${method} error: ${err.message}`);
-        return null;
-    }
-}
-
 /** @param {vscode.ExtensionContext} context */
 async function activate(context) {
+    if (context.extensionMode === vscode.ExtensionMode.UI) {
+        return require('./extension-ui').activate(context);
+    }
+    return activateWorkspace(context);
+}
+
+async function activateWorkspace(context) {
     extensionContext = context;
     extensionOutput = vscode.window.createOutputChannel('Browser Bridge');
     extensionOutput.appendLine('[Browser Bridge] Activating...');
     loadPersistedOwnerAgentId();
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('os1BrowserBridge.mockupPanel', mockupPanelProvider),
-        vscode.commands.registerCommand('os1BrowserBridge.openMockupPanel', async () => {
-            await vscode.commands.executeCommand('os1BrowserBridge.mockupPanel.focus');
-        }),
         vscode.commands.registerCommand('os1BrowserBridge.createScriptSession', async () => {
             cachedOwnerAgentId = null;
             const id = await registerScriptOwnerAgent();
@@ -1200,62 +1145,6 @@ async function activate(context) {
                 vscode.window.showWarningMessage(
                     'os1 Browser Bridge: no active Agent context found. Open Agent chat or run Create Script Session first.'
                 );
-            }
-        }),
-        vscode.commands.registerCommand('os1BrowserBridge.enableMockupMode', async () => {
-            await runDesignCommand('enableMockupMode', viewId => designEnable(execJS, viewId));
-            mockupPanelProvider.refresh();
-            await vscode.commands.executeCommand('os1BrowserBridge.mockupPanel.focus');
-        }),
-        vscode.commands.registerCommand('os1BrowserBridge.disableMockupMode', async () => {
-            await runDesignCommand('disableMockupMode', viewId => designDisable(execJS, viewId));
-        }),
-        vscode.commands.registerCommand('os1BrowserBridge.duplicateElement', async () => {
-            const pick = await vscode.window.showQuickPick(
-                [
-                    { label: 'Element id (#result_app_6)', pick: 'id' },
-                    { label: 'CSS selector', pick: 'selector' },
-                    { label: 'Cursor data-cursor-element-id', pick: 'cursorElementId' },
-                ],
-                { title: 'os1 Mockup: how to find the element?' },
-            );
-            if (!pick) return;
-            const value = await vscode.window.showInputBox({
-                title: `os1 Mockup: ${pick.label}`,
-                placeHolder: pick.pick === 'id' ? 'result_app_6' : pick.pick === 'selector' ? 'a#result_app_6.o_app' : 'cursor-el-125',
-            });
-            if (!value) return;
-            const label = await vscode.window.showInputBox({
-                title: 'Optional label for the copy',
-                placeHolder: 'Discuss (mockup)',
-            });
-            const body = { float: true };
-            body[pick.pick] = value;
-            if (label) body.label = label;
-            await runDesignCommand('duplicateElement', viewId => designDuplicate(execJS, viewId, body));
-        }),
-        vscode.commands.registerCommand('os1BrowserBridge.addImageContainer', async () => {
-            const imageUrl = await vscode.window.showInputBox({
-                title: 'Image URL (leave empty for gradient placeholder)',
-                placeHolder: 'https://picsum.photos/640/360',
-            });
-            if (imageUrl === undefined) return;
-            const label = await vscode.window.showInputBox({
-                title: 'Caption label',
-                placeHolder: 'Hero mockup',
-            });
-            if (label === undefined) return;
-            const body = { width: 400, height: 240, left: 100, top: 100 };
-            if (imageUrl) body.imageUrl = imageUrl;
-            if (label) body.label = label;
-            await runDesignCommand('addImageContainer', viewId => designAddContainer(execJS, viewId, body));
-        }),
-        vscode.commands.registerCommand('os1BrowserBridge.listMockupElements', async () => {
-            const result = await runDesignCommand('listMockupElements', viewId => designList(execJS, viewId));
-            if (result?.items?.length) {
-                const lines = result.items.map(i => `${i.id}: ${i.tag} "${i.text}"`).join('\n');
-                extensionOutput?.appendLine(`[Bridge] mockup elements:\n${lines}`);
-                vscode.window.showInformationMessage(`os1 Mockup: ${result.count} element(s) — see Output → Browser Bridge`);
             }
         }),
     );
