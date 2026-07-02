@@ -52,6 +52,26 @@ const TOOL_SCHEMAS = {
     browser_network_requests: { description: 'Network request log', args: { viewId: 'string' } },
     browser_resize: { description: 'Resize browser viewport', args: { viewId: 'string', width: 'number', height: 'number' } },
     browser_evaluate: { description: 'Execute JavaScript', args: { script: 'string (required)', viewId: 'string' } },
+    browser_design_enable: { description: 'Enable mockup mode (drag handles, orange outlines)', args: { viewId: 'string' } },
+    browser_design_disable: { description: 'Disable mockup mode', args: { viewId: 'string' } },
+    browser_design_duplicate: {
+        description: 'Duplicate a DOM element (Odoo app tile, etc.) for mockup',
+        args: {
+            viewId: 'string', ref: 'string', id: 'string', selector: 'string',
+            cursorElementId: 'string', domPath: 'string', label: 'string',
+            float: 'boolean', cloneWrapper: 'boolean', offsetX: 'number', offsetY: 'number',
+        },
+    },
+    browser_design_add_container: {
+        description: 'Add draggable image/text container for page mockup',
+        args: {
+            viewId: 'string', imageUrl: 'string', label: 'string', width: 'number', height: 'number',
+            left: 'number', top: 'number', parentSelector: 'string', background: 'string',
+        },
+    },
+    browser_design_list: { description: 'List mockup elements on page', args: { viewId: 'string' } },
+    browser_design_remove: { description: 'Remove mockup element by id', args: { id: 'string (required)', viewId: 'string' } },
+    browser_design_move: { description: 'Move mockup element to viewport x/y', args: { id: 'string (required)', left: 'number', top: 'number', viewId: 'string' } },
 };
 
 const REST_ROUTES = [
@@ -67,6 +87,13 @@ const REST_ROUTES = [
     { method: 'POST', path: '/close-tab', description: 'Body: { viewId }' },
     { method: 'POST', path: '/wait-for', description: 'Body: { host?, urlContains?, ref?, text?, timeoutMs?, viewId? }' },
     { method: 'POST', path: '/odoo-login', description: 'Body: { stack?, loginUrl?, publicUrl?, newTab?, credentials? }' },
+    { method: 'POST', path: '/design/enable', description: 'Enable page mockup mode (drag, outlines)' },
+    { method: 'POST', path: '/design/disable', description: 'Disable mockup mode' },
+    { method: 'POST', path: '/design/duplicate', description: 'Duplicate element: { id|ref|selector|cursorElementId|domPath, label?, float? }' },
+    { method: 'POST', path: '/design/container', description: 'Add image container: { imageUrl?, label?, width?, height?, left?, top? }' },
+    { method: 'GET', path: '/design/list', description: 'List mockup elements; query: viewId' },
+    { method: 'POST', path: '/design/remove', description: 'Body: { id, viewId? }' },
+    { method: 'POST', path: '/design/move', description: 'Body: { id, left, top, viewId? }' },
     { method: 'POST', path: '/register-script-session', description: 'Create/discover ownerAgentId' },
     { method: 'POST', path: '/tool', description: 'Body: { name, args }' },
 ];

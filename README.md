@@ -61,6 +61,13 @@ bash uninstall.sh
 | POST | `/close-tab` | `{ viewId }` | Close tab |
 | POST | `/wait-for` | `{ host?, urlContains?, ref?, text?, timeoutMs?, viewId? }` | Poll until condition |
 | POST | `/odoo-login` | `{ stack?, loginUrl?, publicUrl?, newTab?, credentials? }` | Full Odoo login flow |
+| POST | `/design/enable` | `{ viewId? }` | Mockup mode — drag, orange outlines |
+| POST | `/design/disable` | `{ viewId? }` | Turn off mockup mode |
+| POST | `/design/duplicate` | `{ id\|ref\|selector\|cursorElementId\|domPath, label?, float? }` | Clone element (e.g. Odoo app tile) |
+| POST | `/design/container` | `{ imageUrl?, label?, width?, height?, left?, top? }` | Draggable image block |
+| GET | `/design/list` | `?viewId=` | List mockup elements |
+| POST | `/design/remove` | `{ id, viewId? }` | Remove mockup element |
+| POST | `/design/move` | `{ id, left, top, viewId? }` | Programmatic reposition |
 | POST | `/register-script-session` | — | Create/discover `ownerAgentId` |
 | POST | `/tool` | `{ name, args }` | Generic tool dispatch |
 | GET | `/debug/tabs` | — | Tab list + agent id state |

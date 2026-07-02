@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXT_SRC="${SCRIPT_DIR}/extension"
-EXT_NAME="local.os1-cursor-browser-bridge-0.3.0"
+EXT_NAME="local.os1-cursor-browser-bridge-0.4.0"
 
 if [ ! -f "${EXT_SRC}/extension.js" ]; then
   echo "ERROR: missing ${EXT_SRC}/extension.js"

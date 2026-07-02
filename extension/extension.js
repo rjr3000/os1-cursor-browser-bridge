@@ -18,6 +18,15 @@ const path = require('path');
 const { TOOL_SCHEMAS, REST_ROUTES } = require('./lib/tool-schemas');
 const { runOdooLogin, runWaitFor } = require('./lib/odoo-login');
 const { snapshotUrl, toolText, toolMeta } = require('./lib/refs');
+const {
+    designEnable,
+    designDisable,
+    designDuplicate,
+    designAddContainer,
+    designList,
+    designRemove,
+    designMove,
+} = require('./lib/design-api');
 
 const PORT_FILE = '/tmp/cursor-browser-bridge-port';
 const SCRIPT_AGENT_ID = 'os1-browser-bridge-script';
@@ -858,6 +867,55 @@ const tools = {
         }
         return textResult(`Could not close tab ${viewId}`, viewId);
     },
+
+    async browser_design_enable(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const result = await designEnable(execJS, viewId);
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
+
+    async browser_design_disable(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const result = await designDisable(execJS, viewId);
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
+
+    async browser_design_duplicate(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const result = await designDuplicate(execJS, viewId, args || {});
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
+
+    async browser_design_add_container(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const result = await designAddContainer(execJS, viewId, args || {});
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
+
+    async browser_design_list(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const result = await designList(execJS, viewId);
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
+
+    async browser_design_remove(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const result = await designRemove(execJS, viewId, args.id);
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
+
+    async browser_design_move(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const result = await designMove(execJS, viewId, args || {});
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -891,7 +949,7 @@ function startServer(output) {
             }
 
             if (req.method === 'GET' && pathname === '/health') {
-                return respond(200, { ok: true, version: '0.3.0' });
+                return respond(200, { ok: true, version: '0.4.0' });
             }
 
             if (req.method === 'GET' && pathname === '/tools') {
@@ -963,6 +1021,57 @@ function startServer(output) {
                 output.appendLine(`[Bridge] POST /odoo-login stack=${body.stack || 'handoff'}`);
                 const result = await runOdooLogin(tools, body, workspaceFolder());
                 return respond(200, result);
+            }
+
+            if (req.method === 'POST' && pathname === '/design/enable') {
+                const body = await readBody(req);
+                const viewId = await resolveViewId(body.viewId);
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                return respond(200, await designEnable(execJS, viewId));
+            }
+
+            if (req.method === 'POST' && pathname === '/design/disable') {
+                const body = await readBody(req);
+                const viewId = await resolveViewId(body.viewId);
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                return respond(200, await designDisable(execJS, viewId));
+            }
+
+            if (req.method === 'POST' && pathname === '/design/duplicate') {
+                const body = await readBody(req);
+                const viewId = await resolveViewId(body.viewId);
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                output.appendLine('[Bridge] POST /design/duplicate');
+                return respond(200, await designDuplicate(execJS, viewId, body));
+            }
+
+            if (req.method === 'POST' && pathname === '/design/container') {
+                const body = await readBody(req);
+                const viewId = await resolveViewId(body.viewId);
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                output.appendLine('[Bridge] POST /design/container');
+                return respond(200, await designAddContainer(execJS, viewId, body));
+            }
+
+            if (req.method === 'GET' && pathname === '/design/list') {
+                const q = parseQuery(req.url);
+                const viewId = await resolveViewId(q.viewId);
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                return respond(200, await designList(execJS, viewId));
+            }
+
+            if (req.method === 'POST' && pathname === '/design/remove') {
+                const body = await readBody(req);
+                const viewId = await resolveViewId(body.viewId);
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                return respond(200, await designRemove(execJS, viewId, body.id));
+            }
+
+            if (req.method === 'POST' && pathname === '/design/move') {
+                const body = await readBody(req);
+                const viewId = await resolveViewId(body.viewId);
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                return respond(200, await designMove(execJS, viewId, body));
             }
 
             if (req.method === 'POST' && pathname === '/tool') {

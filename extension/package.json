@@ -2,7 +2,7 @@
   "name": "os1-cursor-browser-bridge",
   "displayName": "os1 Cursor Browser Bridge",
   "description": "HTTP API for Cursor IDE embedded browser — script login without Agent (os1 x_cli)",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "local",
   "engines": {
     "vscode": "^1.74.0"
