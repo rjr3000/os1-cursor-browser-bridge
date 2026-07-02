@@ -1,0 +1,25 @@
+{
+  "name": "os1-cursor-browser-bridge",
+  "displayName": "os1 Cursor Browser Bridge",
+  "description": "HTTP API for Cursor IDE embedded browser — script login without Agent (os1 x_cli)",
+  "version": "0.2.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "extensionKind": ["workspace"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "os1BrowserBridge.createScriptSession",
+        "title": "os1 Browser Bridge: Create Script Session"
+      },
+      {
+        "command": "os1BrowserBridge.captureAgentContext",
+        "title": "os1 Browser Bridge: Capture Agent Context"
+      }
+    ]
+  }
+}
