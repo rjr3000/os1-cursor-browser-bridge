@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 EXT_SRC="${SCRIPT_DIR}/extension"
-EXT_NAME="local.os1-cursor-browser-bridge-0.2.1"
+EXT_NAME="local.os1-cursor-browser-bridge-0.3.0"
 
 if [ ! -f "${EXT_SRC}/extension.js" ]; then
   echo "ERROR: missing ${EXT_SRC}/extension.js"
@@ -21,8 +21,9 @@ else
 fi
 
 echo "==> Installing os1 Cursor Browser Bridge to ${EXT_DIR}"
-mkdir -p "${EXT_DIR}"
+mkdir -p "${EXT_DIR}/lib"
 cp "${EXT_SRC}/package.json" "${EXT_SRC}/extension.js" "${EXT_SRC}/snapshot.js" "${EXT_DIR}/"
+cp "${EXT_SRC}/lib/"*.js "${EXT_DIR}/lib/"
 
 echo "==> Done."
 echo ""
@@ -30,4 +31,4 @@ echo "Next:"
 echo "  1. Reload Cursor: Ctrl+Shift+P → Developer: Reload Window"
 echo "  2. Output panel → Browser Bridge → confirm HTTP server started"
 echo "  3. Test: curl -s http://127.0.0.1:\$(cat /tmp/cursor-browser-bridge-port)/health"
-echo "  4. curl -s http://127.0.0.1:\$(cat /tmp/cursor-browser-bridge-port)/health"
+echo "  4. curl -s http://127.0.0.1:\$(cat /tmp/cursor-browser-bridge-port)/tools | head"

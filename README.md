@@ -2,7 +2,7 @@
 
 Control **Cursor IDE's embedded browser** from shell scripts via a local HTTP API — **no Agent**, no Playwright, no external Chromium.
 
-Adapted from [VectorlyApp/cursor-browser-bridge](https://github.com/VectorlyApp/cursor-browser-bridge) with os1-specific agent-session handling and snapshot-ref login flows.
+Adapted from [VectorlyApp/cursor-browser-bridge](https://github.com/VectorlyApp/cursor-browser-bridge) with os1-specific agent-session handling, MCP-parity tools, REST shortcuts, and Odoo login.
 
 ## Why
 
@@ -11,7 +11,8 @@ Cursor's built-in browser (`cursor-ide-browser`) is wired to the Agent panel. Th
 ## Architecture
 
 ```
-your-script.sh  →  HTTP POST /tool  →  extension.js  →  cursor.browserView.*  →  IDE browser tab
+login live1  →  HTTP POST /odoo-login  →  extension.js  →  cursor.browserView.*  →  IDE browser tab
+your-script  →  HTTP POST /tool        →  extension.js  →  cursor.browserView.*  →  IDE browser tab
 ```
 
 Port file: `/tmp/cursor-browser-bridge-port`
@@ -35,7 +36,7 @@ Verify:
 
 ```bash
 curl -s "http://127.0.0.1:$(cat /tmp/cursor-browser-bridge-port)/health"
-# {"ok":true}
+# {"ok":true,"version":"0.3.0"}
 ```
 
 ## Uninstall
@@ -46,27 +47,79 @@ bash uninstall.sh
 
 ## HTTP API
 
-| Method | Path | Body | Response |
-|--------|------|------|----------|
-| GET | `/health` | — | `{ "ok": true }` |
-| GET | `/debug/tabs` | — | tab list + agent id state |
-| POST | `/register-script-session` | — | create/discover `ownerAgentId` |
-| POST | `/tool` | `{ "name": "...", "args": { ... } }` | tool result |
+### REST shortcuts
 
-### Tools
+| Method | Path | Body / query | Description |
+|--------|------|--------------|-------------|
+| GET | `/health` | — | Health + version |
+| GET | `/tools` | — | Tool schemas + route list |
+| GET | `/tabs` | — | Open browser tabs |
+| GET | `/snapshot` | `?viewId=&interactive=` | Accessibility snapshot |
+| GET | `/url` | `?viewId=` | Current tab URL |
+| GET | `/title` | `?viewId=` | Document title |
+| POST | `/navigate` | `{ url, newTab?, viewId? }` | Navigate + snapshot |
+| POST | `/close-tab` | `{ viewId }` | Close tab |
+| POST | `/wait-for` | `{ host?, urlContains?, ref?, text?, timeoutMs?, viewId? }` | Poll until condition |
+| POST | `/odoo-login` | `{ stack?, loginUrl?, publicUrl?, newTab?, credentials? }` | Full Odoo login flow |
+| POST | `/register-script-session` | — | Create/discover `ownerAgentId` |
+| POST | `/tool` | `{ name, args }` | Generic tool dispatch |
+| GET | `/debug/tabs` | — | Tab list + agent id state |
+| GET | `/debug/commands` | — | Cursor browser/agent command names |
 
-`browser_navigate`, `browser_snapshot`, `browser_click`, `browser_fill`, `browser_type`, `browser_evaluate`, `browser_tabs`, `browser_screenshot`, `browser_lock`, `browser_unlock`, and more.
+### Tools (via `POST /tool`)
 
-Example:
+| Tool | Description |
+|------|-------------|
+| `browser_navigate` | Navigate; returns snapshot + `viewId` |
+| `browser_snapshot` | Accessibility snapshot with element refs |
+| `browser_click` | Click by ref |
+| `browser_fill` | Clear and fill input |
+| `browser_type` | Append text |
+| `browser_hover` | Hover element |
+| `browser_press_key` | Keyboard key |
+| `browser_scroll` | Scroll page/element (direction or delta) |
+| `browser_select_option` | Select `<option>` values |
+| `browser_drag` | Drag sourceRef → targetRef or xy |
+| `browser_get_bounding_box` | Element rect by ref |
+| `browser_highlight` | Orange outline briefly |
+| `browser_mouse_click_xy` | Click viewport coordinates |
+| `browser_cdp` | CDP command (Runtime.evaluate fallback) |
+| `browser_screenshot` / `browser_take_screenshot` | PNG screenshot |
+| `browser_tabs` | List tabs |
+| `browser_lock` / `browser_unlock` | Tab lock |
+| `browser_close_tab` | Close tab |
+| `browser_navigate_back` / `browser_navigate_forward` | History |
+| `browser_reload` | Reload page |
+| `browser_console_messages` | Console log |
+| `browser_network_requests` | Network log |
+| `browser_resize` | Viewport size |
+| `browser_evaluate` | Execute JavaScript |
+
+**Important:** Pass `viewId` from navigate snapshot metadata on subsequent calls when multiple tabs are open.
+
+### Examples
 
 ```bash
 PORT=$(cat /tmp/cursor-browser-bridge-port)
+
+# List tools
+curl -s "http://127.0.0.1:${PORT}/tools" | jq '.tools | keys'
+
+# Navigate
+curl -s -X POST "http://127.0.0.1:${PORT}/navigate" \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://example.com"}'
+
+# Odoo stack login (reads .cursor/browser-open-request.json if stack omitted)
+curl -s -X POST "http://127.0.0.1:${PORT}/odoo-login" \
+  -H 'Content-Type: application/json' \
+  -d '{"stack":"live1"}'
+
+# Generic tool
 curl -s -X POST "http://127.0.0.1:${PORT}/tool" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"browser_navigate","args":{"url":"https://example.com"}}'
+  -d '{"name":"browser_snapshot","args":{"interactive":true}}'
 ```
-
-**Important:** Pass `viewId` from navigate snapshot metadata on subsequent calls when multiple tabs are open.
 
 ## Palette commands
 

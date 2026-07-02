@@ -2,13 +2,14 @@
 # Uninstall os1 Cursor Browser Bridge from Cursor extensions dir.
 set -euo pipefail
 
-EXT_NAME="local.os1-cursor-browser-bridge-0.2.1"
-
 for base in "${HOME}/.cursor-server/extensions" "${HOME}/.cursor/extensions"; do
-  if [ -d "${base}/${EXT_NAME}" ]; then
-    echo "==> Removing ${base}/${EXT_NAME}"
-    rm -rf "${base}/${EXT_NAME}"
-  fi
+  for ver in 0.3.0 0.2.1; do
+    EXT_NAME="local.os1-cursor-browser-bridge-${ver}"
+    if [ -d "${base}/${EXT_NAME}" ]; then
+      echo "==> Removing ${base}/${EXT_NAME}"
+      rm -rf "${base}/${EXT_NAME}"
+    fi
+  done
 done
 
 rm -f /tmp/cursor-browser-bridge-port

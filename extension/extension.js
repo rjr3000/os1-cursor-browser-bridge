@@ -15,6 +15,9 @@ const vscode = require('vscode');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { TOOL_SCHEMAS, REST_ROUTES } = require('./lib/tool-schemas');
+const { runOdooLogin, runWaitFor } = require('./lib/odoo-login');
+const { snapshotUrl, toolText, toolMeta } = require('./lib/refs');
 
 const PORT_FILE = '/tmp/cursor-browser-bridge-port';
 const SCRIPT_AGENT_ID = 'os1-browser-bridge-script';
@@ -263,6 +266,33 @@ function textResult(text, viewId) {
     const content = [{ type: 'text', text }];
     if (viewId) content.push({ type: 'metadata', viewId });
     return { content };
+}
+
+function parseQuery(reqUrl) {
+    const u = new URL(reqUrl, 'http://127.0.0.1');
+    const q = {};
+    u.searchParams.forEach((v, k) => { q[k] = v; });
+    return q;
+}
+
+function readBody(req) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        req.on('data', c => chunks.push(c));
+        req.on('end', () => {
+            try {
+                const raw = Buffer.concat(chunks).toString();
+                resolve(raw ? JSON.parse(raw) : {});
+            } catch (err) {
+                reject(err);
+            }
+        });
+        req.on('error', reject);
+    });
+}
+
+function workspaceFolder() {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -621,6 +651,213 @@ const tools = {
         const result = await execJS(args.script, viewId);
         return textResult(JSON.stringify(result, null, 2), viewId);
     },
+
+    async browser_take_screenshot(args) {
+        return tools.browser_screenshot(args);
+    },
+
+    async browser_scroll(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const amount = args.amount ?? 300;
+        let dx = args.deltaX ?? 0;
+        let dy = args.deltaY ?? 0;
+        if (!args.deltaX && !args.deltaY && args.direction) {
+            if (args.direction === 'down') dy = amount;
+            else if (args.direction === 'up') dy = -amount;
+            else if (args.direction === 'right') dx = amount;
+            else if (args.direction === 'left') dx = -amount;
+        }
+        const script = `
+            ${ELEMENT_FINDER_JS}
+            (function() {
+                var ref = ${JSON.stringify(args.ref || null)};
+                var dx = ${dx}, dy = ${dy};
+                var scrollIntoView = ${Boolean(args.scrollIntoView)};
+                if (ref) {
+                    var result = findElementByRef(ref);
+                    if (!result.element) return { success: false, error: 'ref not found' };
+                    if (scrollIntoView) result.element.scrollIntoView({ block: 'center', behavior: 'instant' });
+                    else result.element.scrollBy(dx, dy);
+                    return { success: true };
+                }
+                window.scrollBy(dx, dy);
+                return { success: true };
+            })();
+        `;
+        const result = await execJS(script, viewId);
+        if (!result?.success) return textResult('Scroll failed: ' + JSON.stringify(result), viewId);
+        return textResult(`Scrolled dx=${dx} dy=${dy}`, viewId);
+    },
+
+    async browser_select_option(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const values = args.values || [];
+        const script = `
+            ${ELEMENT_FINDER_JS}
+            (function() {
+                var ref = ${JSON.stringify(args.ref)};
+                var values = ${JSON.stringify(values)};
+                var result = findElementByRef(ref);
+                validateElement(result.element, ref, 'fill');
+                var sel = result.element;
+                if (sel.tagName !== 'SELECT') return { success: false, error: 'not a select' };
+                for (var i = 0; i < sel.options.length; i++) {
+                    var opt = sel.options[i];
+                    var hit = values.some(function(v) {
+                        return opt.value === v || opt.text === v || opt.label === v;
+                    });
+                    opt.selected = hit;
+                }
+                sel.dispatchEvent(new Event('input', { bubbles: true }));
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                return { success: true };
+            })();
+        `;
+        const result = await execJS(script, viewId);
+        if (!result?.success) return textResult('Select failed: ' + JSON.stringify(result), viewId);
+        return textResult(`Selected ${values.join(', ')} on [ref=${args.ref}]`, viewId);
+    },
+
+    async browser_drag(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const script = `
+            ${ELEMENT_FINDER_JS}
+            (function() {
+                var sourceRef = ${JSON.stringify(args.sourceRef)};
+                var targetRef = ${JSON.stringify(args.targetRef || null)};
+                var tx = ${args.targetX ?? 'null'};
+                var ty = ${args.targetY ?? 'null'};
+                var src = findElementByRef(sourceRef);
+                validateElement(src.element, sourceRef, 'click');
+                var srect = src.element.getBoundingClientRect();
+                var sx = srect.left + srect.width / 2;
+                var sy = srect.top + srect.height / 2;
+                var ex = sx, ey = sy;
+                if (targetRef) {
+                    var tgt = findElementByRef(targetRef);
+                    validateElement(tgt.element, targetRef, 'click');
+                    var trect = tgt.element.getBoundingClientRect();
+                    ex = trect.left + trect.width / 2;
+                    ey = trect.top + trect.height / 2;
+                } else if (tx !== null && ty !== null) { ex = tx; ey = ty; }
+                function fire(type, x, y) {
+                    var el = document.elementFromPoint(x, y) || document.body;
+                    el.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, buttons: 1 }));
+                }
+                fire('mousedown', sx, sy);
+                fire('mousemove', ex, ey);
+                fire('mouseup', ex, ey);
+                return { success: true, from: { x: sx, y: sy }, to: { x: ex, y: ey } };
+            })();
+        `;
+        const result = await execJS(script, viewId);
+        if (!result?.success) return textResult('Drag failed: ' + JSON.stringify(result), viewId);
+        return textResult(`Dragged [ref=${args.sourceRef}]`, viewId);
+    },
+
+    async browser_get_bounding_box(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const script = `
+            ${ELEMENT_FINDER_JS}
+            (function() {
+                var ref = ${JSON.stringify(args.ref)};
+                var result = findElementByRef(ref);
+                if (!result.element) return { success: false, error: 'ref not found' };
+                var r = result.element.getBoundingClientRect();
+                return { success: true, x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, left: r.left };
+            })();
+        `;
+        const result = await execJS(script, viewId);
+        return textResult(JSON.stringify(result, null, 2), viewId);
+    },
+
+    async browser_highlight(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const duration = args.durationMs ?? 2000;
+        const script = `
+            ${ELEMENT_FINDER_JS}
+            (function() {
+                var ref = ${JSON.stringify(args.ref)};
+                var duration = ${duration};
+                var result = findElementByRef(ref);
+                if (!result.element) return { success: false, error: 'ref not found' };
+                var el = result.element;
+                var prev = el.style.outline;
+                el.style.outline = '3px solid #ff6600';
+                setTimeout(function() { el.style.outline = prev; }, duration);
+                return { success: true };
+            })();
+        `;
+        await execJS(script, viewId);
+        return textResult(`Highlighted [ref=${args.ref}] for ${duration}ms`, viewId);
+    },
+
+    async browser_mouse_click_xy(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const button = args.button || 'left';
+        const script = `
+            (function() {
+                var x = ${args.x}, y = ${args.y};
+                var btn = ${JSON.stringify(button)};
+                var el = document.elementFromPoint(x, y) || document.body;
+                var map = { left: 0, middle: 1, right: 2 };
+                var b = map[btn] ?? 0;
+                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: x, clientY: y, button: b }));
+                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x, clientY: y, button: b }));
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y, button: b }));
+                return { success: true, tag: el.tagName };
+            })();
+        `;
+        const result = await execJS(script, viewId);
+        return textResult(`Clicked at (${args.x}, ${args.y})`, viewId);
+    },
+
+    async browser_cdp(args) {
+        const viewId = await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab available.');
+        const method = args.method;
+        const params = args.params || {};
+        const cdpCmds = [
+            'cursor.browserView.sendCdpCommand',
+            'cursor.browserView.cdp',
+            'cursor.browserView.executeCdp',
+            'cursor.browserView.sendCDP',
+        ];
+        for (const cmd of cdpCmds) {
+            try {
+                const result = await vscode.commands.executeCommand(cmd, { viewId, method, params });
+                return textResult(JSON.stringify(result, null, 2), viewId);
+            } catch (_) { /* try next */ }
+        }
+        if (method === 'Runtime.evaluate' && params.expression) {
+            const result = await execJS(params.expression, viewId);
+            return textResult(JSON.stringify({ result }, null, 2), viewId);
+        }
+        return textResult(`CDP ${method} not available via bridge`, viewId);
+    },
+
+    async browser_close_tab(args) {
+        const viewId = args.viewId || await resolveViewId(args?.viewId);
+        if (!viewId) return textResult('No browser tab to close.');
+        const closeCmds = [
+            ['cursor.browserView.closeTab', viewId],
+            ['cursor.browserView.close', viewId],
+            ['cursor.browserView.closeTab', { viewId }],
+        ];
+        for (const [cmd, arg] of closeCmds) {
+            try {
+                await vscode.commands.executeCommand(cmd, arg);
+                return textResult(`Closed tab ${viewId}`, viewId);
+            } catch (_) { /* try next */ }
+        }
+        return textResult(`Could not close tab ${viewId}`, viewId);
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -634,54 +871,116 @@ function startServer(output) {
             res.end(JSON.stringify(body));
         };
 
-        if (req.method === 'GET' && req.url === '/debug/tabs') {
-            return respond(200, {
-                info: await listTabsInfo(),
-                cachedOwnerAgentId,
-                agentIdFile: workspaceAgentIdFile(),
-            });
+        const pathname = (req.url || '/').split('?')[0];
+
+        try {
+            if (req.method === 'GET' && pathname === '/debug/tabs') {
+                return respond(200, {
+                    info: await listTabsInfo(),
+                    cachedOwnerAgentId,
+                    agentIdFile: workspaceAgentIdFile(),
+                });
+            }
+
+            if (req.method === 'GET' && pathname === '/debug/commands') {
+                const all = await vscode.commands.getCommands(true);
+                const commands = all
+                    .filter(c => /cursor\.(browser|agent|composer|chat|mcp)/i.test(c))
+                    .sort();
+                return respond(200, { commands });
+            }
+
+            if (req.method === 'GET' && pathname === '/health') {
+                return respond(200, { ok: true, version: '0.3.0' });
+            }
+
+            if (req.method === 'GET' && pathname === '/tools') {
+                return respond(200, { tools: TOOL_SCHEMAS, routes: REST_ROUTES });
+            }
+
+            if (req.method === 'GET' && pathname === '/tabs') {
+                const result = await tools.browser_tabs({});
+                return respond(200, result);
+            }
+
+            if (req.method === 'GET' && pathname === '/snapshot') {
+                const q = parseQuery(req.url);
+                const result = await tools.browser_snapshot({
+                    viewId: q.viewId || undefined,
+                    interactive: q.interactive === 'true' || q.interactive === '1',
+                    maxDepth: q.maxDepth ? Number(q.maxDepth) : undefined,
+                    selector: q.selector || undefined,
+                });
+                return respond(200, result);
+            }
+
+            if (req.method === 'GET' && pathname === '/url') {
+                const q = parseQuery(req.url);
+                const snap = await tools.browser_snapshot({ viewId: q.viewId || undefined });
+                const text = toolText(snap);
+                const url = snapshotUrl(text);
+                const viewId = toolMeta(snap, 'viewId');
+                return respond(200, { url, viewId });
+            }
+
+            if (req.method === 'GET' && pathname === '/title') {
+                const q = parseQuery(req.url);
+                const viewId = q.viewId || await resolveViewId();
+                if (!viewId) return respond(404, { error: 'No browser tab' });
+                const title = await execJS('document.title', viewId);
+                return respond(200, { title, viewId });
+            }
+
+            if (req.method === 'POST' && pathname === '/register-script-session') {
+                cachedOwnerAgentId = null;
+                const id = await registerScriptOwnerAgent() || await discoverOwnerAgentId();
+                if (id) persistOwnerAgentId(id, 'http-register-script-session');
+                return respond(id ? 200 : 503, { ok: Boolean(id), ownerAgentId: id });
+            }
+
+            if (req.method === 'POST' && pathname === '/navigate') {
+                const body = await readBody(req);
+                output.appendLine(`[Bridge] POST /navigate ${body.url || ''}`);
+                const result = await tools.browser_navigate(body);
+                return respond(200, result);
+            }
+
+            if (req.method === 'POST' && pathname === '/close-tab') {
+                const body = await readBody(req);
+                const result = await tools.browser_close_tab(body);
+                return respond(200, result);
+            }
+
+            if (req.method === 'POST' && pathname === '/wait-for') {
+                const body = await readBody(req);
+                output.appendLine('[Bridge] POST /wait-for');
+                const result = await runWaitFor(tools, body);
+                return respond(200, result);
+            }
+
+            if (req.method === 'POST' && pathname === '/odoo-login') {
+                const body = await readBody(req);
+                output.appendLine(`[Bridge] POST /odoo-login stack=${body.stack || 'handoff'}`);
+                const result = await runOdooLogin(tools, body, workspaceFolder());
+                return respond(200, result);
+            }
+
+            if (req.method === 'POST' && pathname === '/tool') {
+                const body = await readBody(req);
+                const { name, args } = body;
+                const handler = tools[name];
+                if (!handler) return respond(404, { error: `Unknown tool: ${name}` });
+
+                output.appendLine(`[Bridge] ${name}`);
+                const result = await handler(args || {});
+                return respond(200, result);
+            }
+
+            respond(404, { error: 'Not found', path: pathname });
+        } catch (err) {
+            output.appendLine(`[Bridge] Error: ${err.message}`);
+            respond(500, { error: err.message, stack: err.stack });
         }
-
-        if (req.method === 'GET' && req.url === '/debug/commands') {
-            const all = await vscode.commands.getCommands(true);
-            const commands = all
-                .filter(c => /cursor\.(browser|agent|composer|chat|mcp)/i.test(c))
-                .sort();
-            return respond(200, { commands });
-        }
-
-        if (req.method === 'POST' && req.url === '/register-script-session') {
-            cachedOwnerAgentId = null;
-            const id = await registerScriptOwnerAgent() || await discoverOwnerAgentId();
-            if (id) persistOwnerAgentId(id, 'http-register-script-session');
-            return respond(id ? 200 : 503, { ok: Boolean(id), ownerAgentId: id });
-        }
-
-        if (req.method === 'GET' && req.url === '/health') {
-            return respond(200, { ok: true });
-        }
-
-        if (req.method === 'POST' && req.url === '/tool') {
-            const chunks = [];
-            req.on('data', c => chunks.push(c));
-            req.on('end', async () => {
-                try {
-                    const { name, args } = JSON.parse(Buffer.concat(chunks).toString());
-                    const handler = tools[name];
-                    if (!handler) return respond(404, { error: `Unknown tool: ${name}` });
-
-                    output.appendLine(`[Bridge] ${name}`);
-                    const result = await handler(args || {});
-                    respond(200, result);
-                } catch (err) {
-                    output.appendLine(`[Bridge] Error: ${err.message}`);
-                    respond(500, { error: err.message, stack: err.stack });
-                }
-            });
-            return;
-        }
-
-        respond(404, { error: 'Not found' });
     });
 
     server.listen(0, '127.0.0.1', () => {
