@@ -7,13 +7,16 @@
         return;
     }
 
-    var VERSION = '1.0.0';
+    var VERSION = '1.1.0';
     var registry = {};
     var seq = 0;
     var dragState = null;
     var enabled = false;
+    var pickMode = false;
+    var pickCallback = null;
 
     var STYLE_ID = 'os1-design-kit-styles';
+    var PANEL_ID = 'os1-mockup-panel';
 
     function injectStyles() {
         if (document.getElementById(STYLE_ID)) return;
@@ -27,6 +30,21 @@
             '.os1-design-container .os1-design-label{padding:8px 12px;font:600 13px/1.3 system-ui,sans-serif;color:#333;background:#f6f6f6}',
             '.os1-design-float{cursor:grab!important;touch-action:none}',
             '.os1-design-banner{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483646;background:#ff6600;color:#fff;font:600 12px system-ui;padding:6px 14px;border-radius:999px;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,0.2)}',
+            '#os1-mockup-panel{position:fixed;top:0;right:0;width:min(320px,38vw);height:100vh;z-index:2147483645;background:#1e1e1e;color:#e0e0e0;font:12px/1.4 system-ui,sans-serif;border-left:1px solid #444;box-shadow:-4px 0 24px rgba(0,0,0,0.35);display:flex;flex-direction:column}',
+            '#os1-mockup-panel .os1-mp-tabs{display:flex;border-bottom:1px solid #444;background:#252526;flex-shrink:0}',
+            '#os1-mockup-panel .os1-mp-tab{padding:8px 10px;color:#666;font-size:11px}',
+            '#os1-mockup-panel .os1-mp-tab.muted{opacity:0.4}',
+            '#os1-mockup-panel .os1-mp-tab.active{color:#fff;border-bottom:2px solid #ff6600;font-weight:600}',
+            '#os1-mockup-panel .os1-mp-body{padding:10px;overflow:auto;flex:1}',
+            '#os1-mockup-panel button{display:block;width:100%;margin:4px 0;padding:8px;border:none;border-radius:4px;cursor:pointer;background:#0e639c;color:#fff;font-size:12px}',
+            '#os1-mockup-panel button.sec{background:#444}',
+            '#os1-mockup-panel input,#os1-mockup-panel select{width:100%;padding:6px;margin:4px 0 8px;background:#333;border:1px solid #555;color:#eee;border-radius:4px}',
+            '#os1-mockup-panel .os1-mp-list{font-size:11px;max-height:100px;overflow:auto;margin:8px 0}',
+            '#os1-mockup-panel .os1-mp-list div{padding:4px 0;border-bottom:1px solid #333;cursor:pointer}',
+            '#os1-mockup-panel .os1-mp-list div:hover{color:#ff6600}',
+            '#os1-mockup-panel .os1-mp-hint{font-size:11px;color:#888;margin-bottom:8px}',
+            'body.os1-mockup-panel-open{margin-right:min(320px,38vw)!important}',
+            '.os1-pick-highlight{outline:3px solid #0066ff!important;outline-offset:2px!important}',
         ].join('\n');
         (document.head || document.documentElement).appendChild(s);
     }
@@ -141,6 +159,7 @@
 
     function onPointerDown(e) {
         if (!enabled) return;
+        if (e.target.closest('#' + PANEL_ID)) return;
         var t = e.target.closest('[data-os1-design-draggable="1"]');
         if (!t) return;
         e.preventDefault();
@@ -207,20 +226,148 @@
         if (b) b.remove();
     }
 
+    function refreshPanelList() {
+        var list = document.getElementById('os1-mp-items');
+        if (!list) return;
+        var data = window.__os1Design.list();
+        list.innerHTML = '';
+        (data.items || []).forEach(function (it) {
+            var row = document.createElement('div');
+            row.textContent = it.id.slice(0, 12) + '… ' + (it.text || it.tag).slice(0, 28);
+            row.title = it.id;
+            row.onclick = function () {
+                window.__os1Design.remove(it.id);
+                refreshPanelList();
+            };
+            list.appendChild(row);
+        });
+    }
+
+    function ensurePanel() {
+        if (document.getElementById(PANEL_ID)) {
+            refreshPanelList();
+            return;
+        }
+        var panel = document.createElement('div');
+        panel.id = PANEL_ID;
+        panel.innerHTML = [
+            '<div class="os1-mp-tabs">',
+            '<span class="os1-mp-tab muted">Components</span>',
+            '<span class="os1-mp-tab muted">Design</span>',
+            '<span class="os1-mp-tab muted">CSS</span>',
+            '<span class="os1-mp-tab active">os1 Mockup</span>',
+            '</div>',
+            '<div class="os1-mp-body">',
+            '<p class="os1-mp-hint">Duplicate tiles, add images, drag orange outlines.</p>',
+            '<label>Element id</label><input id="os1-mp-id" placeholder="result_app_6" />',
+            '<label>Label</label><input id="os1-mp-label" placeholder="Discuss (copy)" />',
+            '<button type="button" id="os1-mp-dup">Duplicate</button>',
+            '<button type="button" id="os1-mp-pick" class="sec">Pick element on page</button>',
+            '<label>Image URL</label><input id="os1-mp-img" placeholder="https://..." />',
+            '<button type="button" id="os1-mp-add">Add image container</button>',
+            '<div class="os1-mp-list" id="os1-mp-items"></div>',
+            '<button type="button" id="os1-mp-off" class="sec">Close mockup panel</button>',
+            '</div>',
+        ].join('');
+        document.body.appendChild(panel);
+        document.body.classList.add('os1-mockup-panel-open');
+
+        document.getElementById('os1-mp-dup').onclick = function () {
+            var id = document.getElementById('os1-mp-id').value.trim();
+            if (!id) return;
+            var label = document.getElementById('os1-mp-label').value.trim();
+            window.__os1Design.duplicate({ id: id }, { label: label, float: true });
+            refreshPanelList();
+        };
+        document.getElementById('os1-mp-pick').onclick = function () {
+            pickMode = true;
+            document.getElementById('os1-mp-pick').textContent = 'Click an element…';
+        };
+        document.getElementById('os1-mp-add').onclick = function () {
+            var url = document.getElementById('os1-mp-img').value.trim();
+            window.__os1Design.addContainer({
+                imageUrl: url || undefined,
+                label: 'Mockup',
+                width: 360,
+                height: 220,
+            });
+            refreshPanelList();
+        };
+        document.getElementById('os1-mp-off').onclick = function () {
+            window.__os1Design.disable();
+        };
+        refreshPanelList();
+    }
+
+    function hidePanel() {
+        var p = document.getElementById(PANEL_ID);
+        if (p) p.remove();
+        document.body.classList.remove('os1-mockup-panel-open');
+    }
+
+    function onPickMove(e) {
+        if (!pickMode) return;
+        var el = document.elementFromPoint(e.clientX, e.clientY);
+        if (!el || el.closest('#' + PANEL_ID)) return;
+        document.querySelectorAll('.os1-pick-highlight').forEach(function (n) {
+            n.classList.remove('os1-pick-highlight');
+        });
+        el.classList.add('os1-pick-highlight');
+    }
+
+    function onPickClick(e) {
+        if (!pickMode) return;
+        var el = document.elementFromPoint(e.clientX, e.clientY);
+        if (!el || el.closest('#' + PANEL_ID)) return;
+        pickMode = false;
+        document.querySelectorAll('.os1-pick-highlight').forEach(function (n) {
+            n.classList.remove('os1-pick-highlight');
+        });
+        var btn = document.getElementById('os1-mp-pick');
+        if (btn) btn.textContent = 'Pick element on page';
+        var spec = {};
+        if (el.id) {
+            spec.id = el.id;
+            document.getElementById('os1-mp-id').value = el.id;
+        } else if (el.getAttribute('data-cursor-element-id')) {
+            spec.cursorElementId = el.getAttribute('data-cursor-element-id');
+        } else {
+            spec.selector = el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).trim().split(/\s+/).slice(0, 2).join('.') : '');
+        }
+        var label = document.getElementById('os1-mp-label').value.trim();
+        window.__os1Design.duplicate(spec, { label: label, float: true });
+        refreshPanelList();
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    function bindPick() {
+        document.addEventListener('mousemove', onPickMove, true);
+        document.addEventListener('click', onPickClick, true);
+    }
+
     window.__os1Design = {
         __version: VERSION,
 
         enable: function () {
             injectStyles();
-            if (!enabled) bindDrag();
+            if (!enabled) {
+                bindDrag();
+                bindPick();
+            }
             enabled = true;
-            showBanner();
-            return { success: true, enabled: true, version: VERSION };
+            ensurePanel();
+            return { success: true, enabled: true, version: VERSION, panel: true };
         },
 
         disable: function () {
             enabled = false;
+            pickMode = false;
             hideBanner();
+            hidePanel();
+            document.querySelectorAll('.os1-pick-highlight').forEach(function (n) {
+                n.classList.remove('os1-pick-highlight');
+            });
             return { success: true, enabled: false };
         },
 
@@ -263,6 +410,7 @@
                 insertParent.insertBefore(clone, insertBefore);
             }
 
+            refreshPanelList();
             return {
                 success: true,
                 id: id,
@@ -317,6 +465,7 @@
             };
             makeFloatAt(box, rect);
 
+            refreshPanelList();
             return { success: true, id: id, rect: rectOf(box), message: 'Container added — drag to reposition' };
         },
 

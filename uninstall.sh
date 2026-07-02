@@ -3,7 +3,7 @@
 set -euo pipefail
 
 for base in "${HOME}/.cursor-server/extensions" "${HOME}/.cursor/extensions"; do
-  for ver in 0.4.1 0.4.0 0.3.0 0.2.1; do
+  for ver in 0.4.2 0.4.1 0.4.0 0.3.0 0.2.1; do
     EXT_NAME="local.os1-cursor-browser-bridge-${ver}"
     if [ -d "${base}/${EXT_NAME}" ]; then
       echo "==> Removing ${base}/${EXT_NAME}"

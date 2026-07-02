@@ -27,6 +27,7 @@ const {
     designRemove,
     designMove,
 } = require('./lib/design-api');
+const { mockupPanelHtml } = require('./lib/mockup-panel-webview');
 
 const PORT_FILE = '/tmp/cursor-browser-bridge-port';
 const SCRIPT_AGENT_ID = 'os1-browser-bridge-script';
@@ -949,7 +950,7 @@ function startServer(output) {
             }
 
             if (req.method === 'GET' && pathname === '/health') {
-                return respond(200, { ok: true, version: '0.4.1' });
+                return respond(200, { ok: true, version: '0.4.2' });
             }
 
             if (req.method === 'GET' && pathname === '/tools') {
@@ -1108,6 +1109,35 @@ function startServer(output) {
 
 let server = null;
 
+class MockupPanelProvider {
+    constructor() {
+        /** @type {vscode.WebviewView | null} */
+        this._view = null;
+    }
+
+    resolveWebviewView(webviewView) {
+        this._view = webviewView;
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [],
+        };
+        webviewView.webview.html = mockupPanelHtml();
+        webviewView.onDidChangeVisibility(() => {
+            if (webviewView.visible) {
+                webviewView.webview.html = mockupPanelHtml();
+            }
+        });
+    }
+
+    refresh() {
+        if (this._view?.visible) {
+            this._view.webview.html = mockupPanelHtml();
+        }
+    }
+}
+
+const mockupPanelProvider = new MockupPanelProvider();
+
 async function activeBrowserViewId() {
     await ensureScriptAgentContext();
     const viewId = await resolveViewId();
@@ -1144,6 +1174,10 @@ async function activate(context) {
     loadPersistedOwnerAgentId();
 
     context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('os1BrowserBridge.mockupPanel', mockupPanelProvider),
+        vscode.commands.registerCommand('os1BrowserBridge.openMockupPanel', async () => {
+            await vscode.commands.executeCommand('os1BrowserBridge.mockupPanel.focus');
+        }),
         vscode.commands.registerCommand('os1BrowserBridge.createScriptSession', async () => {
             cachedOwnerAgentId = null;
             const id = await registerScriptOwnerAgent();
@@ -1170,6 +1204,8 @@ async function activate(context) {
         }),
         vscode.commands.registerCommand('os1BrowserBridge.enableMockupMode', async () => {
             await runDesignCommand('enableMockupMode', viewId => designEnable(execJS, viewId));
+            mockupPanelProvider.refresh();
+            await vscode.commands.executeCommand('os1BrowserBridge.mockupPanel.focus');
         }),
         vscode.commands.registerCommand('os1BrowserBridge.disableMockupMode', async () => {
             await runDesignCommand('disableMockupMode', viewId => designDisable(execJS, viewId));
