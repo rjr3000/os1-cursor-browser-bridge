@@ -2,7 +2,7 @@
   "name": "os1-cursor-browser-bridge",
   "displayName": "os1 Cursor Browser Bridge",
   "description": "HTTP API for Cursor IDE embedded browser — script login without Agent (os1 x_cli)",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "local",
   "engines": {
     "vscode": "^1.74.0"
@@ -19,6 +19,26 @@
       {
         "command": "os1BrowserBridge.captureAgentContext",
         "title": "os1 Browser Bridge: Capture Agent Context"
+      },
+      {
+        "command": "os1BrowserBridge.enableMockupMode",
+        "title": "os1 Browser Bridge: Enable Mockup Mode"
+      },
+      {
+        "command": "os1BrowserBridge.disableMockupMode",
+        "title": "os1 Browser Bridge: Disable Mockup Mode"
+      },
+      {
+        "command": "os1BrowserBridge.duplicateElement",
+        "title": "os1 Browser Bridge: Duplicate Element"
+      },
+      {
+        "command": "os1BrowserBridge.addImageContainer",
+        "title": "os1 Browser Bridge: Add Image Container"
+      },
+      {
+        "command": "os1BrowserBridge.listMockupElements",
+        "title": "os1 Browser Bridge: List Mockup Elements"
       }
     ]
   }
