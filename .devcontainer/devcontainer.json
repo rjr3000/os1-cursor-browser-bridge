@@ -1,0 +1,31 @@
+{
+  "name": "os1-cursor-browser-bridge Codespaces",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "secrets": {
+    "VM_SSH_PRIVATE_KEY": {
+      "description": "ED25519 private key for SSH access to devops-1r VM (172.93.100.110)"
+    },
+    "VM_HOST": {
+      "description": "VM public IP address"
+    },
+    "VM_USER": {
+      "description": "SSH username on the VM"
+    },
+    "VM_REPO_PATH": {
+      "description": "Path to this repo on the VM"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup-ssh.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "GitHub.copilot"
+      ]
+    }
+  }
+}
