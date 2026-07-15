@@ -6,26 +6,20 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "secrets": {
-    "VM_SSH_PRIVATE_KEY": {
-      "description": "ED25519 private key for SSH access to devops-1r VM (172.93.100.110)"
-    },
-    "VM_HOST": {
-      "description": "VM public IP address"
-    },
-    "VM_USER": {
-      "description": "SSH username on the VM"
-    },
-    "VM_REPO_PATH": {
-      "description": "Path to this repo on the VM"
-    }
+    "VM_SSH_PRIVATE_KEY": {"description": "ED25519 private key for SSH to devops-1r VM"},
+    "VM_HOST": {"description": "VM public IP address"},
+    "VM_USER": {"description": "SSH username on the VM"},
+    "VM_REPO_PATH": {"description": "Path to this repo on the VM"},
+    "INFISICAL_DOMAIN": {"description": "Infisical instance URL (default: https://app.infisical.com)"},
+    "INFISICAL_CLIENT_ID": {"description": "Infisical Universal Auth client ID"},
+    "INFISICAL_CLIENT_SECRET": {"description": "Infisical Universal Auth client secret"},
+    "INFISICAL_PROJECT_ID": {"description": "Infisical project ID for this repo (optional)"},
+    "INFISICAL_ENV": {"description": "Infisical environment slug (default: prod)"}
   },
   "postCreateCommand": "bash .devcontainer/setup-ssh.sh",
   "customizations": {
     "vscode": {
-      "extensions": [
-        "ms-azuretools.vscode-docker",
-        "GitHub.copilot"
-      ]
+      "extensions": ["ms-azuretools.vscode-docker", "GitHub.copilot"]
     }
   }
 }
