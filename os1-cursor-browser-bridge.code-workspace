@@ -1,0 +1,38 @@
+{
+	// os1-cursor-browser-bridge workspace — agents-1 SSOT mounted as last folder for skills/rules/agents.
+	"folders": [
+		{
+			"name": "01 · os1-cursor-browser-bridge",
+			"path": "."
+		},
+		{
+			"name": "02 · agents-1 (SSOT)",
+			"path": "../agents-1",
+			"settings": {
+				"chat.agentSkillsLocations": {
+					".cursor/skills": true,
+					".github/skills": false
+				},
+				"chat.agentFilesLocations": {
+					".cursor/agents": true,
+					".github/agents": false
+				},
+				"chat.includeReferencedInstructions": false,
+				"git.enabled": true
+			}
+		}
+	],
+	"settings": {
+		"files.eol": "\n",
+		"python.defaultInterpreterPath": "/usr/bin/python3",
+		"python.terminal.activateEnvironment": false,
+		"npm.packageManager": "pnpm",
+		"terminal.integrated.env.linux": {
+			"PATH": "/home/ubuntu/.local/bin:${env:PATH}",
+			"UV_CACHE_DIR": "/home/ubuntu/.cache/uv",
+			"PNPM_HOME": "/home/ubuntu/.local/share/pnpm"
+		},
+		"git.autoRepositoryDetection": false,
+		"git.openRepositoryInParentFolders": "never"
+	}
+}
