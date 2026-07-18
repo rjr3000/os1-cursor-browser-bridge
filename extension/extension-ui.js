@@ -2,7 +2,7 @@
 
 /**
  * UI extension host (Windows Cursor client when using Remote SSH).
- * Drives browser via cursor.browserView.* directly — docks mockup panel in Secondary Side Bar.
+ * Drives browser via cursor.browserView.* directly — mockup UI in bottom Panel (Cursor has no browser-chrome tab API).
  */
 const vscode = require('vscode');
 const {
@@ -130,40 +130,48 @@ class UiMockupPanelProvider {
 
 const uiMockupProvider = new UiMockupPanelProvider();
 
-async function focusMockupSidebar() {
+let uiActivated = false;
+
+async function focusMockupPanel() {
+    try {
+        await vscode.commands.executeCommand('workbench.action.togglePanel');
+    } catch (_) { /* panel may already be visible */ }
     const cmds = [
-        'workbench.view.extension.os1BrowserBridgeSidebar',
-        'os1BrowserBridge.mockupSidebar.focus',
+        'workbench.view.extension.os1BrowserBridgePanel',
+        'workbench.panel.os1BrowserBridgePanel.focus',
     ];
     for (const c of cmds) {
         try {
             await vscode.commands.executeCommand(c);
+            uiMockupProvider.focus();
             return true;
         } catch (_) { /* try next */ }
     }
-    try {
-        await vscode.commands.executeCommand('workbench.action.toggleAuxiliaryBar');
-    } catch (_) {}
     return false;
 }
 
 /** @param {vscode.ExtensionContext} context */
 async function activate(context) {
+    if (uiActivated) return;
+    uiActivated = true;
+
     uiOutput = vscode.window.createOutputChannel('Browser Bridge (UI)');
     uiOutput.appendLine('[Browser Bridge UI] Activating on local Cursor client…');
 
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('os1BrowserBridge.mockupSidebar', uiMockupProvider, {
+        vscode.window.registerWebviewViewProvider('os1BrowserBridge.mockupPanel', uiMockupProvider, {
             webviewOptions: { retainContextWhenHidden: true },
         }),
         vscode.commands.registerCommand('os1BrowserBridge.openMockupPanel', async () => {
-            await focusMockupSidebar();
+            await focusMockupPanel();
         }),
         vscode.commands.registerCommand('os1BrowserBridge.enableMockupMode', async () => {
             await runDesign(v => designEnable(execJS, v));
             try { await vscode.commands.executeCommand('cursor.browserAutomation.reinjectUIScript'); } catch (_) {}
-            await focusMockupSidebar();
-            vscode.window.showInformationMessage('os1 Mockup: enabled — see Secondary Side Bar tab after CSS');
+            await focusMockupPanel();
+            vscode.window.showInformationMessage(
+                'os1 Mockup enabled — Panel tab “os1 Mockup” (Ctrl+J) + in-page tab after CSS on the Odoo page',
+            );
         }),
         vscode.commands.registerCommand('os1BrowserBridge.disableMockupMode', async () => {
             await runDesign(v => designDisable(execJS, v));
@@ -183,7 +191,7 @@ async function activate(context) {
             const label = await vscode.window.showInputBox({ title: 'Label (optional)' });
             const body = { float: true, [pick.pick]: value, label: label || undefined };
             await runDesign(v => designDuplicate(execJS, v, body));
-            await focusMockupSidebar();
+            await focusMockupPanel();
         }),
         vscode.commands.registerCommand('os1BrowserBridge.addImageContainer', async () => {
             const imageUrl = await vscode.window.showInputBox({ title: 'Image URL (optional)' });
@@ -195,7 +203,7 @@ async function activate(context) {
                 width: 400,
                 height: 240,
             }));
-            await focusMockupSidebar();
+            await focusMockupPanel();
         }),
         vscode.commands.registerCommand('os1BrowserBridge.listMockupElements', async () => {
             const r = await runDesign(v => designList(execJS, v));
@@ -204,7 +212,11 @@ async function activate(context) {
         }),
     );
 
-    uiOutput.appendLine('[Browser Bridge UI] Ready — Secondary Side Bar → os1 Mockup');
+    uiOutput.appendLine('[Browser Bridge UI] Ready — bottom Panel → os1 Mockup (Ctrl+J)');
+
+    setTimeout(() => {
+        focusMockupPanel().catch(() => {});
+    }, 800);
 }
 
 function deactivate() {}

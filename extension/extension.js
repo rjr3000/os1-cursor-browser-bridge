@@ -28,7 +28,8 @@ const {
     designMove,
 } = require('./lib/design-api');
 
-const PORT_FILE = '/tmp/cursor-browser-bridge-port';
+const { PORT_FILE, writePortFile, removePortFile } = require('./lib/paths');
+const { readExtensionVersion } = require('./lib/version');
 const SCRIPT_AGENT_ID = 'os1-browser-bridge-script';
 const AGENT_ID_BASENAME = 'browser-bridge-agent-id';
 
@@ -949,7 +950,7 @@ function startServer(output) {
             }
 
             if (req.method === 'GET' && pathname === '/health') {
-                return respond(200, { ok: true, version: '0.5.0' });
+                return respond(200, { ok: true, version: readExtensionVersion() });
             }
 
             if (req.method === 'GET' && pathname === '/tools') {
@@ -1095,7 +1096,7 @@ function startServer(output) {
     server.listen(0, '127.0.0.1', () => {
         const port = server.address().port;
         output.appendLine(`[Bridge] HTTP server listening on 127.0.0.1:${port}`);
-        fs.writeFileSync(PORT_FILE, String(port), 'utf8');
+        writePortFile(port);
         output.appendLine(`[Bridge] Port written to ${PORT_FILE}`);
     });
 
@@ -1110,9 +1111,6 @@ let server = null;
 
 /** @param {vscode.ExtensionContext} context */
 async function activate(context) {
-    if (context.extensionMode === vscode.ExtensionMode.UI) {
-        return require('./extension-ui').activate(context);
-    }
     return activateWorkspace(context);
 }
 
@@ -1153,16 +1151,17 @@ async function activateWorkspace(context) {
     context.subscriptions.push({
         dispose: () => {
             server?.close();
-            try { fs.unlinkSync(PORT_FILE); } catch (_) {}
+            removePortFile();
         }
     });
 
-    extensionOutput.appendLine('[Browser Bridge] Ready.');
+    const ver = readExtensionVersion();
+    extensionOutput.appendLine(`[Browser Bridge] Ready v${ver}. Port file: ${PORT_FILE}`);
 }
 
 function deactivate() {
     server?.close();
-    try { fs.unlinkSync(PORT_FILE); } catch (_) {}
+    removePortFile();
 }
 
 module.exports = { activate, deactivate };

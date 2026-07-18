@@ -1,13 +1,9 @@
 'use strict';
 
-const fs = require('fs');
+const { readPortFile } = require('./paths');
 
 function readPort() {
-    try {
-        return fs.readFileSync('/tmp/cursor-browser-bridge-port', 'utf8').trim();
-    } catch (_) {
-        return '';
-    }
+    return readPortFile();
 }
 
 /** HTML for workspace panel (HTTP to remote bridge). */

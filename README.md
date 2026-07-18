@@ -128,6 +128,18 @@ curl -s -X POST "http://127.0.0.1:${PORT}/tool" \
   -d '{"name":"browser_snapshot","args":{"interactive":true}}'
 ```
 
+## Mockup (HTTP / in-page only)
+
+The IDE bottom-panel UI is **disabled** (workspace-only extension — avoids Remote SSH UI conflicts).
+
+Mockup still works via HTTP and in-page inject:
+
+| Method | How |
+|--------|-----|
+| `POST /design/enable` | In-page mockup panel + drag handles on Odoo page |
+| `POST /design/duplicate` | Clone elements |
+| Other `/design/*` routes | See HTTP API table above |
+
 ## Palette commands
 
 - **os1 Browser Bridge: Create Script Session** — register script `ownerAgentId` (required on newer Cursor builds)
@@ -137,7 +149,8 @@ curl -s -X POST "http://127.0.0.1:${PORT}/tool" \
 
 | Symptom | Fix |
 |---------|-----|
-| `bridge not running` | Run `install.sh`, reload Cursor |
+| `bridge not running` | Run `install.sh` on VM, reload Cursor |
+| Spinning **os1 Mockup** tab by Terminal | Old **Windows** UI extension — delete `%USERPROFILE%\.cursor\extensions\local.os1-cursor-browser-bridge*`, reload, close tab |
 | `ownerAgentId` / HTTP 500 | Enable Browser Automation; run **Create Script Session** |
 | `about:blank` after navigate | Reuse existing tab (`newTab: false`); pin `viewId` |
 | Microsoft Store popup | Do not open `cursor://` deeplinks from terminal on Windows Remote SSH |
